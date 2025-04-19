@@ -305,7 +305,7 @@ in
   lix =
     let
       args = {
-        nix = pkgs.lixVersions.latest;
+        nix = pkgs.lixPackageSets.latest.lix;
         pname = "lix-multi-user";
       };
     in
