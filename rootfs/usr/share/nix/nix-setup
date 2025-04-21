@@ -1,13 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if test -e /var/nix/store; then
-    exit 0
+version_greater_equal()
+{
+    printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort
+}
+
+NIX_BINDIR=/nix/var/nix/profiles/system/bin
+NIX="${NIX_BINDIR}"/nix
+
+if test -e /nix/store; then
+    if test -f "$NIX" ; then
+        # Query by package owning /etc/nix/nix.conf, since package name might differ depending on implementation (nix,lix)
+        PKG_VERSION=$(rpm --queryformat="%{VERSION}" -qf /etc/nix/nix.conf | awk '{print $NF;}')
+        INSTALLED_VERSION=$("${NIX}" --version | head -n1 | awk '{print $NF;}')
+        if ! version_greater_equal "${INSTALLED_VERSION}" "${PKG_VERSION}"; then
+            echo "${INSTALLED_VERSION} smaller than packaged ${PKG_VERSION}"
+
+            # Backup current db
+            DB=$(mktemp -d)
+            mv /nix/var/nix/db/* "${DB}"
+
+            # Extract just the db from packaged nix
+            TMP=$(mktemp -d)
+            tar -C "$TMP" --strip-components=4 -xpf /usr/share/nix/nix.tar.xz nix/var/nix/db
+            cp "${TMP}"/* /nix/var/nix/db/
+
+            # Dump db that knows about the newer nix version
+            DUMP=$(mktemp)
+            "${NIX_BINDIR}"/nix-store --dump-db > "${DUMP}"
+            rm /nix/var/nix/db/*
+
+            # Import the dump back into the actual db
+            mv "${DB}"/* /nix/var/nix/db/
+            "${NIX_BINDIR}"/nix-store --load-db < "${DUMP}"
+
+            # Clear default and system profile to be replaced by packaged nix version
+            rm /nix/var/nix/profiles/{default,system} || true
+
+            # Do not exit after this to rerun SELinux setup !!!
+        else
+            # Nix is installed and up to date
+            exit 0
+        fi
+    fi
 fi
 
 # Create the store
-tar -C /var -xpf /usr/share/nix/nix.tar.xz
-rm -f /usr/share/nix/nix.tar.xz || true
+tar -C /var --skip-old-files -xpf /usr/share/nix/nix.tar.xz
 
 # Set up root channels ()
 if ! test -e /root/.nix-defexpr && test -e /nix/var/nix/profiles/per-user/root/channels; then
