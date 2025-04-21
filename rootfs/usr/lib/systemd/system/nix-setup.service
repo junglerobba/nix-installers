@@ -1,5 +1,9 @@
 [Unit]
 Description=Nix store setup
+After=nix-mkdir.service
+Wants=nix-mkdir.service
+RequiresMountsFor=/nix
+RequiresMountsFor=/nix/var
 Before=nix-daemon.socket
 
 [Service]
