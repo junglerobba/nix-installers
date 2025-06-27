@@ -217,10 +217,7 @@ let
             selinux
             ;
           channel = toString channel;
-          packageAfterInstall = pkgs.substituteAll {
-            src = ./hooks/after-install.sh;
-            inherit channelName channelURL;
-          };
+          packageAfterInstall = pkgs.replaceVars ./hooks/after-install.sh { };
           packageArch = pkgs.stdenv.targetPlatform.linuxArch;
           packageExt = ext;
           packageType = type;
